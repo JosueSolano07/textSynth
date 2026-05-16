@@ -1,25 +1,23 @@
 from fastapi import FastAPI, UploadFile, File, Body
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from supabase import create_client
 import os
+import pdfplumber
+import requests
+import shutil
+import re
 
+# ----------------------------
+# LOAD ENV
+# ----------------------------
 load_dotenv()
 
-import shutil
-import pdfplumber
-import numpy as np
-import re
-import hashlib
-import faiss
-import requests
-
-from sentence_transformers import SentenceTransformer
-
+# ----------------------------
+# APP
+# ----------------------------
 app = FastAPI()
 
-# ----------------------------
-# CORS
-# ----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,96 +27,73 @@ app.add_middleware(
 )
 
 # ----------------------------
-# CONFIG
+# STORAGE
 # ----------------------------
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# ----------------------------
+# SUPABASE
+# ----------------------------
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ----------------------------
+# GROQ
+# ----------------------------
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # ----------------------------
-# MEMORY LIGHT STORAGE
+# MODEL (LAZY LOAD - CRÍTICO)
 # ----------------------------
-texts = []
-embeddings_list = []
-index = None
-
-# ----------------------------
-# LAZY MODEL (IMPORTANTE)
-# ----------------------------
-embedding_model = None
+model = None
 
 def get_model():
-    global embedding_model
-    if embedding_model is None:
-        embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return embedding_model
+    global model
+    if model is None:
+        from sentence_transformers import SentenceTransformer
+        model = SentenceTransformer("all-MiniLM-L6-v2")
+    return model
 
+# ----------------------------
+# CONFIG (RENDER SAFE)
+# ----------------------------
+MAX_PAGES = 15
+MIN_CHUNK_SIZE = 40
+BATCH_SIZE = 10
+
+# ----------------------------
+# UTILS
+# ----------------------------
+def clean_text(text: str) -> str:
+    text = text.lower()
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def chunk_text(text: str, max_words=100, overlap=20):
+    words = text.split()
+    chunks = []
+
+    i = 0
+    while i < len(words):
+        chunks.append(" ".join(words[i:i + max_words]))
+        i += max_words - overlap
+
+    return chunks
 
 # ----------------------------
 # ROOT
 # ----------------------------
 @app.get("/")
 def root():
-    return {"status": "TextSynth Production Ready 🚀"}
-
-
-# ----------------------------
-# UTILS
-# ----------------------------
-def clean_text(text: str):
-    text = text.lower()
-    text = re.sub(r"\s+", " ", text)
-    return text.strip()
-
-
-def make_hash(text: str):
-    return hashlib.md5(text.encode("utf-8")).hexdigest()
-
-
-def chunk_text(text: str, max_words=100):
-    sentences = re.split(r"\. |\n", text)
-    chunks = []
-    current = []
-
-    for s in sentences:
-        s = s.strip()
-        if not s:
-            continue
-
-        current.append(s)
-
-        if len(" ".join(current).split()) >= max_words:
-            chunks.append(" ".join(current))
-            current = []
-
-    if current:
-        chunks.append(" ".join(current))
-
-    return chunks
-
+    return {"status": "TextSynth RAG running 🚀"}
 
 # ----------------------------
-# FAISS BUILD (LIGHT)
-# ----------------------------
-def build_faiss():
-    global index
-
-    if len(embeddings_list) == 0:
-        return
-
-    vectors = np.array(embeddings_list).astype("float32")
-
-    faiss.normalize_L2(vectors)
-
-    dim = vectors.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(vectors)
-
-
-# ----------------------------
-# UPLOAD PDF
+# UPLOAD PDF → SUPABASE
 # ----------------------------
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
@@ -128,96 +103,89 @@ async def upload(file: UploadFile = File(...)):
     with open(path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    text = ""
+    inserted = 0
+    batch = []
 
     with pdfplumber.open(path) as pdf:
-        for page in pdf.pages:
-            t = page.extract_text()
-            if t:
-                text += t + " "
 
-    text = clean_text(text)
-    chunks = chunk_text(text)
+        for page_index, page in enumerate(pdf.pages):
 
-    model = get_model()
-    embeddings = model.encode(chunks)
+            if page_index >= MAX_PAGES:
+                break
 
-    seen = set()
-    added = 0
+            extracted = page.extract_text()
+            if not extracted:
+                continue
 
-    for i, chunk in enumerate(chunks):
+            text = clean_text(extracted)
+            chunks = chunk_text(text)
 
-        if len(chunk) < 40:
-            continue
+            for chunk_index, chunk in enumerate(chunks):
 
-        h = make_hash(chunk)
-        if h in seen:
-            continue
+                if len(chunk) < MIN_CHUNK_SIZE:
+                    continue
 
-        seen.add(h)
+                embedding = get_model().encode(chunk).tolist()
 
-        texts.append(chunk)
-        embeddings_list.append(embeddings[i])
+                batch.append({
+                    "content": chunk,
+                    "embedding": embedding,
+                    "page": page_index,
+                    "chunk_index": chunk_index
+                })
 
-        added += 1
+                inserted += 1
 
-    build_faiss()
+                # batch insert
+                if len(batch) >= BATCH_SIZE:
+                    supabase.table("documents").insert(batch).execute()
+                    batch = []
+
+    # flush final batch
+    if batch:
+        supabase.table("documents").insert(batch).execute()
 
     return {
-        "chunks_added": added,
-        "total_documents": len(texts)
+        "message": "uploaded successfully",
+        "chunks_inserted": inserted
     }
 
-
 # ----------------------------
-# ASK
+# ASK → RAG + GROQ
 # ----------------------------
 @app.post("/ask")
 async def ask(data: dict = Body(...)):
 
-    if index is None:
-        return {"error": "No hay documentos cargados"}
+    question = data.get("question", "")
 
-    question = data.get("question", "").strip().lower()
+    if not question:
+        return {"error": "question is required"}
 
-    model = get_model()
+    q_embedding = get_model().encode(question).tolist()
 
-    q_emb = model.encode(question).astype("float32")
-    q_emb = np.array([q_emb])
-    faiss.normalize_L2(q_emb)
+    response = supabase.rpc("match_documents", {
+        "query_embedding": q_embedding,
+        "match_count": 3
+    }).execute()
 
-    scores, ids = index.search(q_emb, 3)
+    matches = response.data or []
 
-    top = []
-
-    for i, idx in enumerate(ids[0]):
-        if idx == -1:
-            continue
-
-        top.append({
-            "chunk": texts[idx],
-            "similarity": float(scores[0][i])
-        })
-
-    context = "\n".join([t["chunk"][:300] for t in top])
+    context = "\n".join([m["content"] for m in matches])
 
     prompt = f"""
-Responde SOLO en español, breve.
+Eres un asistente experto en documentos.
+
+Responde SOLO en español, de forma clara y breve.
 
 CONTEXTO:
 {context}
 
 PREGUNTA:
 {question}
-
-RESPUESTA:
 """
 
-    if not GROQ_API_KEY:
-        return {"error": "Falta GROQ_API_KEY"}
-
     try:
-        response = requests.post(
+        res = requests.post(
             GROQ_URL,
             headers={
                 "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -233,14 +201,14 @@ RESPUESTA:
             timeout=60
         )
 
-        response.raise_for_status()
-        result = response.json()["choices"][0]["message"]["content"]
+        res.raise_for_status()
+        answer = res.json()["choices"][0]["message"]["content"]
 
     except Exception as e:
         return {"error": str(e)}
 
     return {
         "question": question,
-        "answer": result,
-        "sources": top
+        "answer": answer,
+        "sources": matches
     }
