@@ -4,5 +4,7 @@ __pycache__/
 .env
 textsynth.db
 node_modules/
+backend/venv/
+venv/
 dist/
 uploads/
