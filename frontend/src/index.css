@@ -52,6 +52,9 @@
 
 body {
   margin: 0;
+  font-family: Inter, system-ui;
+  background: #0f0f10;
+  color: white;
 }
 
 #root {

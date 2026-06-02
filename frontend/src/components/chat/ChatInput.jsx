@@ -32,25 +32,29 @@ export default function ChatInput({ onSend }) {
 
 const styles = {
   container: {
-    display: "flex",
-    padding: "10px",
-    borderTop: "1px solid #333",
-    background: "#1a1a1a",
+    padding: "16px 24px",
+    background: "#212121",
   },
+
   input: {
     flex: 1,
-    padding: "10px",
-    borderRadius: "8px",
-    border: "none",
+    background: "#303030",
+    color: "#ececec",
+    border: "1px solid #404040",
+    borderRadius: "24px",
+    padding: "14px 18px",
     outline: "none",
+    fontSize: "15px",
     marginRight: "10px",
   },
+
   button: {
-    padding: "10px 16px",
-    borderRadius: "8px",
-    background: "#2b6cff",
+    background: "#10a37f",
     color: "white",
     border: "none",
+    borderRadius: "12px",
+    padding: "0 18px",
     cursor: "pointer",
+    fontWeight: "600",
   },
 };

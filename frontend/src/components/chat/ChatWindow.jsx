@@ -61,8 +61,26 @@ export default function ChatWindow() {
             key={i}
             style={{
               ...styles.message,
-              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
-              background: m.role === "user" ? "#2b6cff" : "#2a2a2a",
+
+              background:
+                m.role === "user"
+                  ? "#303030"
+                  : "#2a2a2a",
+
+              alignSelf:
+                m.role === "user"
+                  ? "flex-end"
+                  : "flex-start",
+
+              marginRight:
+                m.role === "user"
+                  ? "24px"
+                  : "auto",
+
+              marginLeft:
+                m.role === "assistant"
+                  ? "24px"
+                  : "auto",
             }}
           >
             {m.text}
@@ -83,23 +101,30 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     height: "100vh",
-    background: "#111",
-    color: "white",
+    background: "#212121",
   },
+
   chatArea: {
     flex: 1,
-    padding: "20px",
     overflowY: "auto",
     display: "flex",
     flexDirection: "column",
-    gap: "10px",
+    gap: "20px",
+    padding: "24px 0",
+    minHeight: 0,
   },
+
   message: {
-    padding: "10px 14px",
-    borderRadius: "12px",
-    maxWidth: "60%",
-    color: "white",
-    fontSize: "14px",
-    whiteSpace: "pre-wrap"
+    padding: "14px 18px",
+    borderRadius: "18px",
+    maxWidth: "780px",
+    width: "fit-content",
+    fontSize: "15px",
+    lineHeight: "1.7",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    color: "#ececec",
+    marginLeft: "auto",
+    marginRight: "auto",
   },
 };
