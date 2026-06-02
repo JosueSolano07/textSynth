@@ -5,34 +5,40 @@ from app.services.llm_service import generate_answer
 from app.utils.context import build_context, clean_sources
 
 
-def ask_question(question: str):
+def ask_question(question: str, history: list = None):
 
+    # 1. embedding de la pregunta
     query_embedding = embed_text(question)
 
-    # 1. retrieval
+    # 2. retrieval
     matches = search_vectors(query_embedding)
 
+    # fallback si no hay resultados
     if not matches:
         return {
-            "answer": "No se encontró información relevante.",
+            "answer": "No encontré información relevante en los documentos cargados.",
             "sources": []
         }
 
-    # 2. rerank
+    # 3. rerank
     matches = rerank(matches)
 
-    # fallback safety
+    # safety fallback
     if not matches:
         matches = search_vectors(query_embedding)
 
-    # 3. sources
+    # 4. limpiar fuentes
     unique_sources = clean_sources(matches)
 
-    # 4. context (LIMITADO)
+    # 5. construir contexto
     context = build_context(unique_sources, max_chars=2500)
 
-    # 5. LLM
-    answer = generate_answer(question, context)
+    # 6. generar respuesta con memoria
+    answer = generate_answer(
+        question=question,
+        context=context,
+        history=history
+    )
 
     return {
         "answer": answer,

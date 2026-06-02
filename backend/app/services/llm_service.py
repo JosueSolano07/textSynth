@@ -2,26 +2,39 @@ import requests
 from app.domain.config import GROQ_API_KEY, GROQ_URL
 
 
-def generate_answer(question: str, context: str):
+def generate_answer(question: str, context: str, history: list = None):
 
+    # 1. construir historial en texto
+    history_text = ""
+
+    if history:
+        for msg in history[-8:]:
+            role = "Usuario" if msg.role == "user" else "Asistente"
+            content = msg.content
+            history_text += f"{role}: {content}\n"
+
+    # 2. prompt estructurado tipo ChatGPT
     prompt = f"""
-Eres un asistente experto en documentos.
+Eres un asistente inteligente con memoria de conversación.
 
-Reglas:
-- Responde SOLO usando el contexto.
-- Si no está en el contexto, di: "No tengo información suficiente."
-- Si el contexto es suficiente, explica de forma clara y completa.
-- Si es corto, expande ligeramente sin inventar información.
-- No repitas literalmente el texto.
-- Usa lenguaje natural y educativo.
+REGLAS IMPORTANTES:
+- Usa el historial para entender contexto personal del usuario
+- Si el usuario pregunta "como me llamo", usa el historial
+- Si no hay información suficiente, dilo de forma natural
+- No inventes datos que no estén en el historial o contexto
+- Responde de forma conversacional y clara
 
-CONTEXTO:
-{context}
+HISTORIAL DE CONVERSACIÓN:
+{history_text if history_text else "No hay historial previo."}
 
-PREGUNTA:
+CONTEXTO DE DOCUMENTOS:
+{context if context else "Sin contexto relevante."}
+
+PREGUNTA DEL USUARIO:
 {question}
 """
 
+    # 3. llamada al modelo
     res = requests.post(
         GROQ_URL,
         headers={
@@ -30,8 +43,13 @@ PREGUNTA:
         },
         json={
             "model": "llama-3.1-8b-instant",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.1
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "temperature": 0.2
         },
         timeout=60
     )

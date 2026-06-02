@@ -4,6 +4,7 @@ from app.rag.query.ask import ask_question
 
 router = APIRouter()
 
+
 @router.post("")
 async def ask(data: AskRequest):
 
@@ -12,4 +13,7 @@ async def ask(data: AskRequest):
     if not question:
         return {"error": "question is required"}
 
-    return ask_question(question)
+    return ask_question(
+        question=question,
+        history=data.history
+    )

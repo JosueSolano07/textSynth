@@ -1,5 +1,4 @@
 from fastapi import APIRouter
-
 from app.api.routes import ask, chat, ingest, upload
 
 api_router = APIRouter()
