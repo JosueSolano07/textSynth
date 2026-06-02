@@ -1,16 +1,18 @@
 import pdfplumber
-from app.utils.text import clean_text
 
-
-def extract_pdf(path: str):
+def load_pdf(path: str, max_pages: int = 15):
     pages = []
 
     with pdfplumber.open(path) as pdf:
         for i, page in enumerate(pdf.pages):
-            text = page.extract_text()
-            if not text:
-                continue
+            if i >= max_pages:
+                break
 
-            pages.append((i, clean_text(text)))
+            text = page.extract_text()
+            if text:
+                pages.append({
+                    "page": i,
+                    "content": text
+                })
 
     return pages
