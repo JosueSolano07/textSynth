@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Body
+from fastapi import APIRouter
+from app.domain.schemas import AskRequest
 from app.rag.query.ask import ask_question
 
 router = APIRouter()
 
+@router.post("")
+async def ask(data: AskRequest):
 
-@router.post("/ask")
-async def ask(data: dict = Body(...)):
-
-    question = data.get("question", "").strip()
+    question = data.question.strip()
 
     if not question:
         return {"error": "question is required"}
