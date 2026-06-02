@@ -3,7 +3,7 @@ import shutil
 import os
 
 from app.rag.ingestion.pdf_loader import load_pdf
-from app.rag.pipeline import ingest_document
+from app.rag.ingestion.ingest import ingest_document
 
 router = APIRouter()
 

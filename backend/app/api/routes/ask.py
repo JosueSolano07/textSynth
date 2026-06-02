@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Body
-from app.rag.pipeline import ask_question
+from app.rag.query.ask import ask_question
 
 router = APIRouter()
 
