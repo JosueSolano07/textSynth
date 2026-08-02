@@ -8,3 +8,5 @@ backend/venv/
 venv/
 dist/
 uploads/
+__pycache__/
+*.pyc

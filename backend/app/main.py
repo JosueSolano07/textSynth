@@ -1,21 +1,22 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 
+from app.api.middleware import register_middlewares
 from app.api.router import api_router
 
-app = FastAPI(title="TextSynth")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
 )
+
+register_middlewares(app)
 
 app.include_router(api_router)
 
 
 @app.get("/")
-def root():
-    return {"status": "TextSynth RAG running "}
+async def root():
+    return {
+        "status": "running",
+        "application": "TextSynth"
+    }

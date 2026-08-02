@@ -1,20 +1,12 @@
-from fastapi import APIRouter, UploadFile, File
-from app.rag.ingestion.ingest import ingest_document
+from fastapi import APIRouter
+
+from app.services.document_service import DocumentService
 
 router = APIRouter()
 
+document_service = DocumentService()
 
-@router.post("/ingest")
-async def ingest(file: UploadFile = File(...)):
 
-    path = f"uploads/{file.filename}"
-
-    with open(path, "wb") as f:
-        f.write(await file.read())
-
-    count = ingest_document(path)
-
-    return {
-        "message": "documento indexado",
-        "chunks": count
-    }
+@router.post("/{document_id}")
+async def ingest(document_id: str):
+    return await document_service.ingest(document_id)

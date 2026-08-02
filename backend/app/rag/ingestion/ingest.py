@@ -1,40 +1,90 @@
-import os
+from pathlib import Path
 
-from app.rag.ingestion.pdf_loader import load_pdf
-from app.rag.ingestion.chunker import chunk_text
-from app.rag.ingestion.embedder import embed_text
-from app.db.queries import insert_chunks
+from app.documents.parser import DocumentParser
+from app.rag.ingestion.chunker import Chunker
+from app.vectorstore.embeddings import EmbeddingManager
+from app.vectorstore.faiss import FaissVectorStore
 
 
-def ingest_document(path: str):
-    pages = load_pdf(path)
+class IngestionPipeline:
+    """
+    Pipeline técnico encargado de transformar un archivo
+    en conocimiento indexado.
 
-    batch = []
-    filename = os.path.basename(path)
+    Flujo:
 
-    for page in pages:
-        page_index = int(page["page"])
-        text = page["content"]
+        Archivo
+            │
+            ▼
+        Parser
+            │
+            ▼
+        Documento
+            │
+            ▼
+        Chunks
+            │
+            ▼
+        Embeddings
+            │
+            ▼
+        VectorStore
+    """
 
-        chunks = chunk_text(text)
+    def __init__(self):
 
-        for chunk_index, chunk in enumerate(chunks):
+        self.parser = DocumentParser()
 
-            chunk = chunk.strip()
-            if not chunk:
-                continue
+        self.chunker = Chunker()
 
-            embedding = embed_text(chunk)
+        self.embedding_manager = EmbeddingManager()
 
-            batch.append({
-                "document_name": filename,
-                "content": chunk,
-                "embedding": embedding,
-                "chunk_index": chunk_index,
-                "page": page_index
-            })
+        self.vectorstore = FaissVectorStore()
 
-    if batch:
-        insert_chunks(batch)
+    async def ingest(self, file_path: str | Path) -> dict:
 
-    return len(batch)
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+
+            raise FileNotFoundError(file_path)
+
+        # -------------------------------------------------
+        # 1. Leer documento
+        # -------------------------------------------------
+
+        document = self.parser.parse(file_path)
+
+        # -------------------------------------------------
+        # 2. Dividir en chunks
+        # -------------------------------------------------
+
+        chunks = self.chunker.split(document)
+
+        # -------------------------------------------------
+        # 3. Generar embeddings
+        # -------------------------------------------------
+
+        embeddings = self.embedding_manager.embed(chunks)
+
+        # -------------------------------------------------
+        # 4. Guardar en índice vectorial
+        # -------------------------------------------------
+
+        self.vectorstore.add(
+            chunks=chunks,
+            embeddings=embeddings,
+        )
+
+        # -------------------------------------------------
+
+        return {
+
+            "success": True,
+
+            "filename": file_path.name,
+
+            "chunks": len(chunks),
+
+            "indexed": True,
+        }

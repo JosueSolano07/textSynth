@@ -1,14 +1,30 @@
-def rerank(matches):
+from app.models.chunk import Chunk
 
-    filtered = [
-        m for m in matches
-        if m.get("content") and len(m["content"].strip()) > 40
-    ]
 
-    if not filtered:
-        return matches
+class Reranker:
+    """
+    Reordena los chunks recuperados.
 
-    if not any(m.get("score") for m in filtered):
-        return filtered
+    Actualmente utiliza la puntuación devuelta por
+    FAISS. Más adelante podrá sustituirse por un
+    CrossEncoder (BGE, Jina, Cohere, etc.).
+    """
 
-    return sorted(filtered, key=lambda x: x.get("score", 0), reverse=True)
+    def __init__(self):
+        pass
+
+    # ---------------------------------------------------------
+
+    def rerank(
+        self,
+        question: str,
+        chunks: list[Chunk],
+    ) -> list[Chunk]:
+
+        if not chunks:
+            return []
+
+        return sorted(
+            chunks,
+            key=lambda chunk: chunk.score,
+        )
